@@ -540,7 +540,7 @@ else
   if [ -z "${VERSION_FOUND}" ]; then
     echo "The version specified for ${GITHUB_ORG}/${TOOL_NAME} (${TOOL_VERSION}) was not found."
     echo "Please check available releases on https://github.com/${GITHUB_ORG}/${TOOL_NAME}/releases"
-    TOOL_VERSION=""
+    exit 1
   else
     echo "Version specified for ${GITHUB_ORG}/${TOOL_NAME}: ${TOOL_VERSION}"
     TOOL_VERSION="${VERSION_FOUND}"
