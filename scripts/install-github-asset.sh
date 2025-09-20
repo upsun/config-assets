@@ -434,8 +434,11 @@ get_asset_id() {
   ASSET_NAME=$(echo "${ASSET}" | jq -r '.name')
   ASSET_CONTENT_TYPE=$(echo "${ASSET}" | jq -r '.content_type')
 
-  [ -z "${ASSET_ID}" ] || [ "${ASSET_ID}" = "null" ] && error_exit "Can't extract asset ID from API response"
-  [ -z "${ASSET_NAME}" ] || [ "${ASSET_NAME}" = "null" ] && error_exit "Can't extract asset name from API response"
+  if [ -z "${ASSET_ID}" ] || [ "${ASSET_ID}" = "null" ]; then
+    error_exit "Can't extract asset ID from API response"
+  elif [ -z "${ASSET_NAME}" ] || [ "${ASSET_NAME}" = "null" ]; then
+    error_exit "Can't extract asset name from API response"
+  fi
 
   echo "Found asset: ${ASSET_NAME}"
 }
