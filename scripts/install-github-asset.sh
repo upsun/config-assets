@@ -140,13 +140,13 @@ get_asset_checksum() {
   local checksums_url=$(echo "${checksums_asset}" | jq -r '.browser_download_url')
   local checksums_file="/tmp/checksums"
 
-  curl --silent -L "${checksums_url}" ${AUTH_HEADER:+-H "${AUTH_HEADER}"} -o "${checksums_file}" || return 1
+  curl --silent -L --max-filesize 65536 --max-time 30 "${checksums_url}" ${AUTH_HEADER:+-H "${AUTH_HEADER}"} -o "${checksums_file}" || return 1
 
   local checksum=""
-  if grep -q "${asset_name}" "${checksums_file}"; then
-    checksum=$(grep "${asset_name}" "${checksums_file}" | awk '{print $1}')
-  elif grep -q "$(basename "${asset_name}")" "${checksums_file}"; then
-    checksum=$(grep "$(basename "${asset_name}")" "${checksums_file}" | awk '{print $1}')
+  if grep -q "[[:space:]]${asset_name}$" "${checksums_file}"; then
+    checksum=$(grep "[[:space:]]${asset_name}$" "${checksums_file}" | awk '{print $1}')
+  elif grep -q "[[:space:]]$(basename "${asset_name}")$" "${checksums_file}"; then
+    checksum=$(grep "[[:space:]]$(basename "${asset_name}")$" "${checksums_file}" | awk '{print $1}')
   fi
 
   rm -f "${checksums_file}"
