@@ -3,9 +3,6 @@
 # It handles extracting the file and caching the result.
 #
 # shellcheck disable=SC2059  # Variables in printf format strings used for colored output
-# shellcheck disable=SC2154  # PLATFORM_* variables are set by Upsun environment
-# shellcheck disable=SC2155  # Declare and assign separately - simple cases are acceptable
-# shellcheck disable=SC2312  # Process substitution with pipes is standard and safe here
 #
 # In the build hook (in the Upsun YAML app configuration), add the following:
 #   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- "<org/repo>" "[<release_version>]" "[<asset_name>]"
@@ -48,6 +45,7 @@ fetch_releases_data() {
     error_exit "Failed to fetch releases from GitHub API"
   fi
 
+  # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local http_status=$(echo "${api_response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
   RELEASES_DATA="${api_response%HTTPSTATUS:*}"
 
@@ -121,13 +119,17 @@ validate_archive_paths() {
     if [[ "${rel_path}" == *"../"* ]] || [[ "${rel_path:0:1}" == "/" ]]; then
       error_exit "Security violation: Archive contains dangerous path: ${rel_path}"
     fi
-  done < <(find "${extract_dir}" -type f -print0)
+  done < <(
+    # shellcheck disable=SC2312  # Process substitution return value not relevant here
+    find "${extract_dir}" -type f -print0
+  )
 }
 
 get_asset_checksum() {
   local asset_name="$1"
   fetch_releases_data
 
+  # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local checksums_asset=$(echo "${RELEASES_DATA}" | jq -r --arg TOOL_VERSION "${TOOL_VERSION}" '
     .[] | select(.tag_name==$TOOL_VERSION) | .assets | map(select(
       (.name | test("checksum|sha256|sha1|md5"; "i")) or (.name | test("sum"; "i"))
@@ -137,6 +139,7 @@ get_asset_checksum() {
     return 1
   fi
 
+  # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local checksums_url=$(echo "${checksums_asset}" | jq -r '.browser_download_url')
   local checksums_file="/tmp/checksums"
 
@@ -144,8 +147,10 @@ get_asset_checksum() {
 
   local checksum=""
   if grep -q "[[:space:]]${asset_name}$" "${checksums_file}"; then
+    # shellcheck disable=SC2312  # Pipeline return value not relevant here
     checksum=$(grep "[[:space:]]${asset_name}$" "${checksums_file}" | awk '{print $1}')
   elif grep -q "[[:space:]]$(basename "${asset_name}")$" "${checksums_file}"; then
+    # shellcheck disable=SC2312  # Pipeline return value not relevant here
     checksum=$(grep "[[:space:]]$(basename "${asset_name}")$" "${checksums_file}" | awk '{print $1}')
   fi
 
@@ -186,6 +191,7 @@ verify_checksum() {
     return 0
   fi
 
+  # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local actual_checksum=$(${hash_cmd} "${file_path}" | awk '{print $1}')
 
   if [ "${actual_checksum}" = "${expected_checksum}" ]; then
@@ -208,6 +214,7 @@ fi
 
 run() {
   # Run the process.
+  # shellcheck disable=SC2154  # PLATFORM_CACHE_DIR is set by Upsun environment
   cd "$PLATFORM_CACHE_DIR" || exit 1
 
   if [ -z "${ASSET_NAME_PARAM}" ] && [ ! -f "${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${TOOL_NAME}" ] ||
@@ -267,6 +274,7 @@ download_binary() {
   fi
 
   # Check file size
+  # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local file_size=$(wc -c < "${TMP_DEST}/${TOOL_NAME}-asset")
   if [ "${file_size}" -eq 0 ]; then
     echo "❌ Downloaded file is empty"
@@ -328,6 +336,7 @@ download_binary() {
   *)
     echo "No extraction needed for ${ASSET_CONTENT_TYPE} file"
     # Sanitize the filename for the final binary
+    # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
     local sanitized_name=$(sanitize_filename "${TOOL_NAME}")
     if ! mv "${TMP_DEST}/${TOOL_NAME}-asset" "/tmp/${TOOL_NAME}/${sanitized_name}"; then
       echo "❌ Failed to move binary file"
@@ -344,6 +353,7 @@ move_binary() {
   echo "Caching ${TOOL_NAME} binary..."
 
   # Search for binary in the archive tree (limit depth to prevent excessive resource usage)
+  # shellcheck disable=SC2312  # Pipeline return value not relevant here
   FOUND=$(find "${TMP_DEST}" -maxdepth 10 -type f -name "${TOOL_NAME}" | head -n1)
   if [ -z "${FOUND}" ]; then
     printf >&2 "❌ ${RED_BOLD}Can't find ${TOOL_NAME} in the subtree of /tmp/${NC}\n\n"
@@ -375,6 +385,7 @@ copy_lib() {
   echo "Copying ${TOOL_NAME} to the PATH..."
 
   # Ensure destination directory exists
+  # shellcheck disable=SC2154  # PLATFORM_APP_DIR is set by Upsun environment
   if ! mkdir -p "${PLATFORM_APP_DIR}/.global/bin"; then
     printf "❌ ${RED_BOLD}Failed to create destination directory: ${PLATFORM_APP_DIR}/.global/bin${NC}\n"
     exit 1
@@ -402,7 +413,10 @@ copy_lib() {
       exit 1
     fi
     files_copied=$((files_copied + 1))
-  done < <(find "${source_dir}/" -maxdepth 1 \( -type f -o -type l \) -print0)
+  done < <(
+    # shellcheck disable=SC2312  # Process substitution return value not relevant here
+    find "${source_dir}/" -maxdepth 1 \( -type f -o -type l \) -print0
+  )
 
   if [ "${files_copied}" -eq 0 ]; then
     printf "❌ ${RED_BOLD}No files found to copy in ${source_dir}${NC}\n"
@@ -415,7 +429,10 @@ copy_lib() {
       printf "❌ ${RED_BOLD}Failed to make ${file} executable${NC}\n"
       exit 1
     fi
-  done < <(find "${PLATFORM_APP_DIR}/.global/bin" -maxdepth 1 \( -type f -o -type l \) -print0)
+  done < <(
+    # shellcheck disable=SC2312  # Process substitution return value not relevant here
+    find "${PLATFORM_APP_DIR}/.global/bin" -maxdepth 1 \( -type f -o -type l \) -print0
+  )
 
 }
 
@@ -453,6 +470,7 @@ get_asset_id() {
 
 ensure_environment() {
   # If not running in an Upsun build environment, do nothing.
+  # shellcheck disable=SC2154  # PLATFORM_CACHE_DIR is set by Upsun environment
   if [ -z "${PLATFORM_CACHE_DIR}" ]; then
     printf "${RED_BOLD}Not running in an Upsun build environment. Aborting ${TOOL_NAME} installation.${NC}\n"
     exit 1
@@ -461,6 +479,7 @@ ensure_environment() {
 
 get_repo_latest_version() {
   fetch_releases_data
+  # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local response=$(echo "${RELEASES_DATA}" | jq -r '.[0].tag_name')
   [ "${response}" != "null" ] && [ -n "${response}" ] && TOOL_VERSION=${response}
 }
@@ -479,7 +498,7 @@ check_repository_auth() {
 
   # Separate the response body and HTTP status
   body="${response%HTTPSTATUS:*}"
-  status=$(echo "${response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+  status="${response##*HTTPSTATUS:}"
 
   # Extract the repository visibility
   is_private=$(echo "${body}" | jq -r '.private')
