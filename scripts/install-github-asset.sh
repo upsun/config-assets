@@ -2,6 +2,11 @@
 # This script downloads a binary from GitHub download and installs it into an Upsun app container.
 # It handles extracting the file and caching the result.
 #
+# shellcheck disable=SC2059  # Variables in printf format strings used for colored output
+# shellcheck disable=SC2154  # PLATFORM_* variables are set by Upsun environment
+# shellcheck disable=SC2155  # Declare and assign separately - simple cases are acceptable
+# shellcheck disable=SC2312  # Process substitution with pipes is standard and safe here
+#
 # In the build hook (in the Upsun YAML app configuration), add the following:
 #   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- "<org/repo>" "[<release_version>]" "[<asset_name>]"
 #
@@ -38,12 +43,13 @@ fetch_releases_data() {
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/${GITHUB_ORG}/${TOOL_NAME}/releases?per_page=5")
 
+  # shellcheck disable=SC2181  # $? is more readable than command repetition here
   if [ $? -ne 0 ]; then
     error_exit "Failed to fetch releases from GitHub API"
   fi
 
   local http_status=$(echo "${api_response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-  RELEASES_DATA=$(echo "${api_response}" | sed -e 's/HTTPSTATUS\:.*//g')
+  RELEASES_DATA="${api_response%HTTPSTATUS:*}"
 
   if [ "${http_status}" -ge 400 ]; then
     error_exit "GitHub API request failed with status ${http_status}"
@@ -103,6 +109,7 @@ sanitize_filename() {
   # Remove path components
   filename=$(basename "${filename}")
   # Remove dangerous characters
+  # shellcheck disable=SC2001  # sed is clearer than ${var//pattern/replace} for complex character class
   filename=$(echo "${filename}" | sed 's/[^a-zA-Z0-9._-]//g')
   echo "${filename}"
 }
@@ -280,6 +287,7 @@ download_binary() {
   echo "Downloaded file type: ${FILE_TYPE}"
 
   # Validate file type matches expected content type
+  # shellcheck disable=SC2249  # Default case not needed - unsupported types handled elsewhere
   case "${ASSET_CONTENT_TYPE}" in
   application/zip)
     if [[ "${FILE_TYPE}" != "application/zip" ]]; then
@@ -470,7 +478,7 @@ check_repository_auth() {
     "https://api.github.com/repos/${GITHUB_ORG}/${TOOL_NAME}")
 
   # Separate the response body and HTTP status
-  body=$(echo "${response}" | sed -e 's/HTTPSTATUS\:.*//g')
+  body="${response%HTTPSTATUS:*}"
   status=$(echo "${response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
 
   # Extract the repository visibility
