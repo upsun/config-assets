@@ -443,7 +443,7 @@ get_asset_id() {
     echo >&2 "Auto-detecting linux/x86_64 asset..."
     ASSET=$(echo "${RELEASES_DATA}" | jq -r --arg TOOL_VERSION "${TOOL_VERSION}" '
       .[] | select(.tag_name==$TOOL_VERSION) | .assets | map(select(
-        (.name | test("linux")) and (.name | test("x86|amd64")) and (.name | test("\\.(tgz|tar\\.gz|gz|zip|tar\\.bz2|tar\\.xz)$"))
+        (.name | test("linux")) and (.name | test("x86|amd64")) and (.name | test("\\.(tgz|tar\\.gz|zip|tar\\.bz2|tar\\.xz)$"))
       )) | .[0]')
   else
     echo >&2 "Searching for asset: ${ASSET_NAME_PARAM}"

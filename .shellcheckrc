@@ -6,7 +6,7 @@
 # Disabled rules (add explanations for any rules you disable):
 
 # Project-wide style preferences:
-disable=SC2292  # Prefer [[ ]] over [ ] - keeping [ ] for POSIX compatibility across all scripts
+disable=SC2292  # Prefer [[ ]] over [ ] - keeping [ ] for POSIX compatibility where possible
 
 # Enable all optional checks for maximum code quality
 enable=add-default-case
