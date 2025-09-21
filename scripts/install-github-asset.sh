@@ -335,8 +335,8 @@ download_binary() {
 move_binary() {
   echo "Caching ${TOOL_NAME} binary..."
 
-  # Search for binary in the archive tree
-  FOUND=$(find "${TMP_DEST}" -type f -name "${TOOL_NAME}" | head -n1)
+  # Search for binary in the archive tree (limit depth to prevent excessive resource usage)
+  FOUND=$(find "${TMP_DEST}" -maxdepth 10 -type f -name "${TOOL_NAME}" | head -n1)
   if [ -z "${FOUND}" ]; then
     printf >&2 "❌ ${RED_BOLD}Can't find ${TOOL_NAME} in the subtree of /tmp/${NC}\n\n"
     exit 1
