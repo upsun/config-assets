@@ -34,6 +34,29 @@ fetch_releases_data() {
   fi
 
   local api_response
+  # If a specific version is requested, try to fetch it directly first
+  if [ -n "${TOOL_VERSION}" ]; then
+    api_response=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -L \
+      --max-time 30 \
+      ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${GITHUB_ORG}/${TOOL_NAME}/releases/tags/${TOOL_VERSION}")
+
+    # shellcheck disable=SC2181  # $? is more readable than command repetition here
+    if [ $? -eq 0 ]; then
+      # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
+      local http_status=$(echo "${api_response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+      local response_body="${api_response%HTTPSTATUS:*}"
+
+      if [ "${http_status}" -eq 200 ] && echo "${response_body}" | jq empty >/dev/null 2>&1; then
+        # Wrap single release in array to match existing API format
+        RELEASES_DATA="[${response_body}]"
+        return 0
+      fi
+    fi
+  fi
+
+  # Fall back to fetching recent releases (for latest version or if specific version fetch failed)
   api_response=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -L \
     --max-time 30 \
     ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
@@ -446,10 +469,20 @@ get_asset_id() {
 
   if [ -z "${ASSET_NAME_PARAM}" ]; then
     echo >&2 "Auto-detecting linux/x86_64 asset..."
+    # First try to find archived assets
     ASSET=$(echo "${RELEASES_DATA}" | jq -r --arg TOOL_VERSION "${TOOL_VERSION}" '
       .[] | select(.tag_name==$TOOL_VERSION) | .assets | map(select(
         (.name | test("linux")) and (.name | test("x86|amd64")) and (.name | test("\\.(tgz|tar\\.gz|zip|tar\\.bz2|tar\\.xz)$"))
       )) | .[0]')
+
+    # If no archived asset found, try to find direct binary
+    if [ "${ASSET}" = "null" ] || [ -z "${ASSET}" ]; then
+      echo >&2 "No archived asset found, looking for direct binary..."
+      ASSET=$(echo "${RELEASES_DATA}" | jq -r --arg TOOL_VERSION "${TOOL_VERSION}" '
+        .[] | select(.tag_name==$TOOL_VERSION) | .assets | map(select(
+          (.name | test("linux")) and (.name | test("x86|amd64"))
+        )) | .[0]')
+    fi
   else
     echo >&2 "Searching for asset: ${ASSET_NAME_PARAM}"
     ASSET=$(echo "${RELEASES_DATA}" | jq -r --arg TOOL_VERSION "${TOOL_VERSION}" --arg BINARY_NAME "${ASSET_NAME_PARAM}" '
