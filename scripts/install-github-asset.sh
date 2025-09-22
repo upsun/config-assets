@@ -45,7 +45,7 @@ fetch_releases_data() {
     # shellcheck disable=SC2181  # $? is more readable than command repetition here
     if [ $? -eq 0 ]; then
       # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
-      local http_status=$(echo "${api_response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+      local http_status=${api_response##*HTTPSTATUS:}
       local response_body="${api_response%HTTPSTATUS:*}"
 
       if [ "${http_status}" -eq 200 ] && echo "${response_body}" | jq empty >/dev/null 2>&1; then
@@ -69,7 +69,7 @@ fetch_releases_data() {
   fi
 
   # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
-  local http_status=$(echo "${api_response}" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+  local http_status=${api_response##*HTTPSTATUS:}
   RELEASES_DATA="${api_response%HTTPSTATUS:*}"
 
   if [ "${http_status}" -ge 400 ]; then
