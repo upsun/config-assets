@@ -1,0 +1,19 @@
+# ShellCheck configuration for config-assets repository
+#
+# This file documents project-wide decisions about shellcheck warnings
+# to maintain consistency across the team and CI environments.
+
+# Disabled rules (add explanations for any rules you disable):
+
+# Project-wide style preferences:
+disable=SC2292  # Prefer [[ ]] over [ ] - keeping [ ] for POSIX compatibility where possible
+
+# Enable all optional checks for maximum code quality
+enable=add-default-case
+enable=avoid-nullary-conditions
+enable=check-extra-masked-returns
+enable=check-set-e-suppressed
+enable=check-unassigned-uppercase
+enable=deprecate-which
+enable=quote-safe-variables
+enable=require-double-brackets
