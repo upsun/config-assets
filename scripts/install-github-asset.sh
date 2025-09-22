@@ -375,7 +375,12 @@ move_binary() {
 
   if [ "${BINARY_DIR}" != "${DEST_DIR}" ]; then
     cp -r "${BINARY_DIR}/." "${DEST_DIR}/"
-    rm -rf "${BINARY_DIR}"
+
+    if [ -n "${BINARY_DIR}" ] && [[ "${BINARY_DIR}" == "${TMP_DEST}"/* ]]; then
+      rm -rf "${BINARY_DIR}"
+    else
+      echo "Warning: Skipping removal of directory: ${BINARY_DIR}"
+    fi
   fi
 
   echo "Cache updated"
