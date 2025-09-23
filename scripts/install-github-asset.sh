@@ -155,6 +155,7 @@ get_asset_checksum() {
   # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
   local checksums_asset=$(echo "${RELEASES_DATA}" | jq -r --arg TOOL_VERSION "${TOOL_VERSION}" '
     .[] | select(.tag_name==$TOOL_VERSION) | .assets | map(select(
+      (.name | test("linux")) and (.name | test("x86|amd64")) and
       (.name | test("checksum|sha256|sha1|md5"; "i")) or (.name | test("sum"; "i"))
     )) | .[0]')
 
