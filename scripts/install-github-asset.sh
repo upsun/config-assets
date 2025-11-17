@@ -21,9 +21,9 @@ GREEN='\033[0;32m'
 GREEN_BOLD='\033[01;32m'
 NC='\033[0m'
 
-# Security constants
-MAX_FILE_SIZE=1073741824  # 1GB limit
-CURL_TIMEOUT=300          # 5 minutes timeout
+# Default limits for the binary download
+MAX_FILE_SIZE=${MAX_FILE_SIZE:-2G}
+MAX_TIME=${MAX_TIME:-300}
 
 # Global variable to cache releases data
 RELEASES_DATA=""
@@ -282,7 +282,7 @@ download_binary() {
   # Download asset with error handling and limits
   if ! curl --progress-bar -L \
     --max-filesize "${MAX_FILE_SIZE}" \
-    --max-time "${CURL_TIMEOUT}" \
+    --max-time "${MAX_TIME}" \
     -H "Accept: application/octet-stream" "https://api.github.com/repos/${GITHUB_ORG}/${TOOL_NAME}/releases/assets/${ASSET_ID}" \
     ${AUTH_HEADER:+-H "${AUTH_HEADER}"} \
     -o "${TMP_DEST}/${TOOL_NAME}-asset"; then
