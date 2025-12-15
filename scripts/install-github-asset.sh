@@ -603,6 +603,10 @@ else
   validate_inputs
 fi
 
+# Normalize "latest" keyword to empty string for version detection
+if [ "${TOOL_VERSION}" = "latest" ]; then
+  TOOL_VERSION=""
+fi
 
 # check if we are on an Upsun
 ensure_environment
