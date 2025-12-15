@@ -270,7 +270,7 @@ run() {
     echo "Found ${BINARY_NAME} ${TOOL_VERSION} in cache"
   fi
 
-  copy_lib "${BINARY_NAME}" "${TOOL_VERSION}"
+  copy_lib
 
   printf "✅ ${GREEN_BOLD}${BINARY_NAME} installation successful${NC}\n"
 
