@@ -144,6 +144,18 @@ validate_inputs() {
   fi
 }
 
+set_cache_path() {
+  # Set CACHE_PATH based on whether an asset name is specified.
+  # When ASSET_NAME_PARAM is provided, include it in the path to allow
+  # caching multiple assets from the same repo/version.
+  # shellcheck disable=SC2154  # PLATFORM_CACHE_DIR is set by Upsun environment
+  if [ -z "${ASSET_NAME_PARAM}" ]; then
+    CACHE_PATH="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}"
+  else
+    CACHE_PATH="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}"
+  fi
+}
+
 sanitize_filename() {
   # Remove path traversal attempts and dangerous characters from filename
   local filename="$1"
@@ -261,8 +273,7 @@ run() {
   # shellcheck disable=SC2154  # PLATFORM_CACHE_DIR is set by Upsun environment
   cd "$PLATFORM_CACHE_DIR" || exit 1
 
-  if [ -z "${ASSET_NAME_PARAM}" ] && [ ! -f "${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${BINARY_NAME}" ] ||
-     [ -n "${ASSET_NAME_PARAM}" ] && [ ! -f "${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}/${BINARY_NAME}" ]; then
+  if [ ! -f "${CACHE_PATH}/${BINARY_NAME}" ]; then
     ensure_source
     download_binary
     move_binary
@@ -409,16 +420,11 @@ move_binary() {
   # Get the directory where the binary is located
   BINARY_DIR=$(dirname "$FOUND")
 
-  # copy all binaries in the BINARY_DIR in cache folder
-  if [ -z "${ASSET_NAME_PARAM}" ]; then
-    DEST_DIR="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}"
-  else
-    DEST_DIR="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}"
-    mkdir -p "$DEST_DIR"
-  fi
+  # Copy all binaries in the BINARY_DIR to cache folder.
+  mkdir -p "${CACHE_PATH}"
 
-  if [ "${BINARY_DIR}" != "${DEST_DIR}" ]; then
-    cp -r "${BINARY_DIR}/." "${DEST_DIR}/"
+  if [ "${BINARY_DIR}" != "${CACHE_PATH}" ]; then
+    cp -r "${BINARY_DIR}/." "${CACHE_PATH}/"
 
     if [ -n "${BINARY_DIR}" ] && [[ "${BINARY_DIR}" == "${TMP_DEST}"/* ]]; then
       rm -rf "${BINARY_DIR}"
@@ -440,17 +446,9 @@ copy_lib() {
     exit 1
   fi
 
-  # Determine source directory based on asset name parameter
-  local source_dir
-  if [ -z "${ASSET_NAME_PARAM}" ]; then
-    source_dir="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}"
-  else
-    source_dir="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}"
-  fi
-
   # Verify source directory exists
-  if [ ! -d "${source_dir}" ]; then
-    printf "❌ ${RED_BOLD}Source directory does not exist: ${source_dir}${NC}\n"
+  if [ ! -d "${CACHE_PATH}" ]; then
+    printf "❌ ${RED_BOLD}Source directory does not exist: ${CACHE_PATH}${NC}\n"
     exit 1
   fi
 
@@ -464,11 +462,11 @@ copy_lib() {
     files_copied=$((files_copied + 1))
   done < <(
     # shellcheck disable=SC2312  # Process substitution return value not relevant here
-    find "${source_dir}/" -maxdepth 1 \( -type f -o -type l \) -print0
+    find "${CACHE_PATH}/" -maxdepth 1 \( -type f -o -type l \) -print0
   )
 
   if [ "${files_copied}" -eq 0 ]; then
-    printf "❌ ${RED_BOLD}No files found to copy in ${source_dir}${NC}\n"
+    printf "❌ ${RED_BOLD}No files found to copy in ${CACHE_PATH}${NC}\n"
     exit 1
   fi
 
@@ -639,6 +637,7 @@ if [ -z "${TOOL_VERSION}" ]; then
   exit 1
 fi
 
-# Asset name parameter is handled in validate_inputs()
+# Set the cache path now that TOOL_VERSION is known.
+set_cache_path
 
 run
