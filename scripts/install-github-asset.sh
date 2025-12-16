@@ -5,12 +5,13 @@
 # shellcheck disable=SC2059  # Variables in printf format strings used for colored output
 #
 # In the build hook (in the Upsun YAML app configuration), add the following:
-#   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- "<org/repo>" "[<release_version>]" "[<asset_name>]"
+#   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- "<org/repo>" "[<release_version>]" "[<asset_name>]" "[<binary_name>]"
 #
 # Examples:
 #   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- jgm/pandoc
 #   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- mikefarah/yq 4.45.1
 #   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- dunglas/frankenphp 1.5.0 frankenphp-linux-x86_64-gnu
+#   curl -fsS https://raw.githubusercontent.com/upsun/config-assets/main/scripts/install-github-asset.sh | bash -s -- miniflux/v2 latest "" miniflux
 #
 # Contributors:
 #  - Florent HUCK <florent.huck@platform.sh>
@@ -108,9 +109,23 @@ validate_inputs() {
     exit 1
   fi
 
+  # Validate binary name format if specified
+  if [ -n "${BINARY_NAME_PARAM}" ] && ! echo "${BINARY_NAME_PARAM}" | grep -qE '^[a-zA-Z0-9._-]+$'; then
+    printf "${RED_BOLD}Invalid binary name format: ${BINARY_NAME_PARAM}${NC}\\n"
+    printf "${RED}Binary name must contain only alphanumeric characters, dots, underscores, and hyphens${NC}\\n"
+    exit 1
+  fi
+
   # Extract and validate individual components
   GITHUB_ORG=$(echo "${GITHUB_REPO}" | cut -d'/' -f1)
   TOOL_NAME=$(echo "${GITHUB_REPO}" | cut -d'/' -f2)
+
+  # Set binary name (defaults to TOOL_NAME if not specified)
+  if [ -n "${BINARY_NAME_PARAM}" ]; then
+    BINARY_NAME="${BINARY_NAME_PARAM}"
+  else
+    BINARY_NAME="${TOOL_NAME}"
+  fi
 
   # Additional length checks to prevent excessively long inputs
   if [ ${#GITHUB_ORG} -gt 50 ] || [ ${#TOOL_NAME} -gt 50 ]; then
@@ -121,6 +136,23 @@ validate_inputs() {
   if [ -n "${ASSET_NAME_PARAM}" ] && [ ${#ASSET_NAME_PARAM} -gt 100 ]; then
     printf "${RED_BOLD}Asset name too long (max 100 characters)${NC}\\n"
     exit 1
+  fi
+
+  if [ -n "${BINARY_NAME_PARAM}" ] && [ ${#BINARY_NAME_PARAM} -gt 100 ]; then
+    printf "${RED_BOLD}Binary name too long (max 100 characters)${NC}\\n"
+    exit 1
+  fi
+}
+
+set_cache_path() {
+  # Set CACHE_PATH based on whether an asset name is specified.
+  # When ASSET_NAME_PARAM is provided, include it in the path to allow
+  # caching multiple assets from the same repo/version.
+  # shellcheck disable=SC2154  # PLATFORM_CACHE_DIR is set by Upsun environment
+  if [ -z "${ASSET_NAME_PARAM}" ]; then
+    CACHE_PATH="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}"
+  else
+    CACHE_PATH="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}"
   fi
 }
 
@@ -241,20 +273,19 @@ run() {
   # shellcheck disable=SC2154  # PLATFORM_CACHE_DIR is set by Upsun environment
   cd "$PLATFORM_CACHE_DIR" || exit 1
 
-  if [ -z "${ASSET_NAME_PARAM}" ] && [ ! -f "${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${TOOL_NAME}" ] ||
-     [ -n "${ASSET_NAME_PARAM}" ] && [ ! -f "${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}/${TOOL_NAME}" ]; then
+  if [ ! -f "${CACHE_PATH}/${BINARY_NAME}" ]; then
     ensure_source
     download_binary
     move_binary
   else
-    echo "Found ${TOOL_NAME} ${TOOL_VERSION} in cache"
+    echo "Found ${BINARY_NAME} ${TOOL_VERSION} in cache"
   fi
 
-  copy_lib "${TOOL_NAME}" "${TOOL_VERSION}"
+  copy_lib
 
-  printf "✅ ${GREEN_BOLD}${TOOL_NAME} installation successful${NC}\n"
+  printf "✅ ${GREEN_BOLD}${BINARY_NAME} installation successful${NC}\n"
 
-  printf "${GREEN}To use it, run: ${NC}${GREEN_BOLD}${TOOL_NAME}${NC}\n"
+  printf "${GREEN}To use it, run: ${NC}${GREEN_BOLD}${BINARY_NAME}${NC}\n"
 }
 
 ensure_source() {
@@ -361,7 +392,7 @@ download_binary() {
     echo "No extraction needed for ${ASSET_CONTENT_TYPE} file"
     # Sanitize the filename for the final binary
     # shellcheck disable=SC2155  # Declare and assign separately - simple case acceptable
-    local sanitized_name=$(sanitize_filename "${TOOL_NAME}")
+    local sanitized_name=$(sanitize_filename "${BINARY_NAME}")
     if ! mv "${TMP_DEST}/${TOOL_NAME}-asset" "/tmp/${TOOL_NAME}/${sanitized_name}"; then
       echo "❌ Failed to move binary file"
       rm -f "${TMP_DEST}/${TOOL_NAME}-asset"
@@ -374,13 +405,13 @@ download_binary() {
 }
 
 move_binary() {
-  echo "Caching ${TOOL_NAME} binary..."
+  echo "Caching ${BINARY_NAME} binary..."
 
   # Search for binary in the archive tree (limit depth to prevent excessive resource usage)
   # shellcheck disable=SC2312  # Pipeline return value not relevant here
-  FOUND=$(find "${TMP_DEST}" -maxdepth 10 -type f -name "${TOOL_NAME}" | head -n1)
+  FOUND=$(find "${TMP_DEST}" -maxdepth 10 -type f -name "${BINARY_NAME}" | head -n1)
   if [ -z "${FOUND}" ]; then
-    printf >&2 "❌ ${RED_BOLD}Can't find ${TOOL_NAME} in the subtree of /tmp/${NC}\n\n"
+    printf >&2 "❌ ${RED_BOLD}Can't find ${BINARY_NAME} in the subtree of /tmp/${NC}\n\n"
     exit 1
   fi
 
@@ -389,16 +420,11 @@ move_binary() {
   # Get the directory where the binary is located
   BINARY_DIR=$(dirname "$FOUND")
 
-  # copy all binaries in the BINARY_DIR in cache folder
-  if [ -z "${ASSET_NAME_PARAM}" ]; then
-    DEST_DIR="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}"
-  else
-    DEST_DIR="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}"
-    mkdir -p "$DEST_DIR"
-  fi
+  # Copy all binaries in the BINARY_DIR to cache folder.
+  mkdir -p "${CACHE_PATH}"
 
-  if [ "${BINARY_DIR}" != "${DEST_DIR}" ]; then
-    cp -r "${BINARY_DIR}/." "${DEST_DIR}/"
+  if [ "${BINARY_DIR}" != "${CACHE_PATH}" ]; then
+    cp -r "${BINARY_DIR}/." "${CACHE_PATH}/"
 
     if [ -n "${BINARY_DIR}" ] && [[ "${BINARY_DIR}" == "${TMP_DEST}"/* ]]; then
       rm -rf "${BINARY_DIR}"
@@ -411,7 +437,7 @@ move_binary() {
 }
 
 copy_lib() {
-  echo "Copying ${TOOL_NAME} to the PATH..."
+  echo "Copying ${BINARY_NAME} to the PATH..."
 
   # Ensure destination directory exists
   # shellcheck disable=SC2154  # PLATFORM_APP_DIR is set by Upsun environment
@@ -420,17 +446,9 @@ copy_lib() {
     exit 1
   fi
 
-  # Determine source directory based on asset name parameter
-  local source_dir
-  if [ -z "${ASSET_NAME_PARAM}" ]; then
-    source_dir="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}"
-  else
-    source_dir="${PLATFORM_CACHE_DIR}/${TOOL_NAME}/${TOOL_VERSION}/${ASSET_NAME_PARAM}"
-  fi
-
   # Verify source directory exists
-  if [ ! -d "${source_dir}" ]; then
-    printf "❌ ${RED_BOLD}Source directory does not exist: ${source_dir}${NC}\n"
+  if [ ! -d "${CACHE_PATH}" ]; then
+    printf "❌ ${RED_BOLD}Source directory does not exist: ${CACHE_PATH}${NC}\n"
     exit 1
   fi
 
@@ -444,11 +462,11 @@ copy_lib() {
     files_copied=$((files_copied + 1))
   done < <(
     # shellcheck disable=SC2312  # Process substitution return value not relevant here
-    find "${source_dir}/" -maxdepth 1 \( -type f -o -type l \) -print0
+    find "${CACHE_PATH}/" -maxdepth 1 \( -type f -o -type l \) -print0
   )
 
   if [ "${files_copied}" -eq 0 ]; then
-    printf "❌ ${RED_BOLD}No files found to copy in ${source_dir}${NC}\n"
+    printf "❌ ${RED_BOLD}No files found to copy in ${CACHE_PATH}${NC}\n"
     exit 1
   fi
 
@@ -579,11 +597,16 @@ else
   # Set parameters for validation
   TOOL_VERSION="$2"
   ASSET_NAME_PARAM="$3"
+  BINARY_NAME_PARAM="$4"
 
   # Validate all inputs
   validate_inputs
 fi
 
+# Normalize "latest" keyword to empty string for version detection
+if [ "${TOOL_VERSION}" = "latest" ]; then
+  TOOL_VERSION=""
+fi
 
 # check if we are on an Upsun
 ensure_environment
@@ -618,6 +641,7 @@ if [ -z "${TOOL_VERSION}" ]; then
   exit 1
 fi
 
-# Asset name parameter is handled in validate_inputs()
+# Set the cache path now that TOOL_VERSION is known.
+set_cache_path
 
 run
